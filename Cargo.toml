@@ -1,0 +1,24 @@
+[package]
+name = "libbuildinfo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cargo_metadata = "0.19.2"
+humansize = { version = "2.1.3" }
+rmp-serde = { version = "1.3.0" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.143" }
+thiserror = { version = "2.0.16" }
+sysinfo = "0.37.0"
+valuable = { version = "0.1.1", features = ["derive"] }
+liberror = { git = "https://github.com/charliethomson/liberror" }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = 0 }
+
+# Dont care
+missing_errors_doc = { level = "allow", priority = 1 }
+
+# Dont care
+module_inception = { level = "allow", priority = 1 }
