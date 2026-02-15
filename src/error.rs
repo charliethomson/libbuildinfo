@@ -14,28 +14,28 @@ use crate::extractor::ExtractError;
     content = "context"
 )]
 pub enum BuildInfoError {
-    #[serde(rename = "ltd.pog.ttr.build_info.error.extract")]
+    #[serde(rename = "dev.thmsn.build_info.error.extract")]
     #[error("Failed to extract build information: {inner_error}")]
     Extract { inner_error: ExtractError },
-    #[serde(rename = "ltd.pog.ttr.build_info.error.serialize")]
+    #[serde(rename = "dev.thmsn.build_info.error.serialize")]
     #[error("Failed to serialize build information: {inner_error}")]
     Serialize { inner_error: AnyError },
-    #[serde(rename = "ltd.pog.ttr.build_info.error.env_var")]
+    #[serde(rename = "dev.thmsn.build_info.error.env_var")]
     #[error("Failed to retrieve environment variable '{var}': {inner_error}")]
     EnvVar { var: String, inner_error: AnyError },
-    #[serde(rename = "ltd.pog.ttr.build_info.error.open")]
+    #[serde(rename = "dev.thmsn.build_info.error.open")]
     #[error("Failed to open file: {inner_error}")]
     Open {
         path: PathBuf,
         inner_error: AnyError,
     },
-    #[serde(rename = "ltd.pog.ttr.build_info.error.write")]
+    #[serde(rename = "dev.thmsn.build_info.error.write")]
     #[error("Failed to write to file: {inner_error}")]
     Write {
         path: PathBuf,
         inner_error: AnyError,
     },
-    #[serde(rename = "ltd.pog.ttr.build_info.error.load")]
+    #[serde(rename = "dev.thmsn.build_info.error.load")]
     #[error("Failed to load build information: {inner_error}")]
     Load { inner_error: AnyError },
 }

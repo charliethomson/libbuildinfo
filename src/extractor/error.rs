@@ -11,13 +11,13 @@ use crate::extractor::{agent::AgentError, git::GitError, package::PackageError};
     content = "context"
 )]
 pub enum ExtractError {
-    #[serde(rename = "ltd.pog.ttr.build_info.extract.error.package")]
+    #[serde(rename = "dev.thmsn.build_info.extract.error.package")]
     #[error("Failed to extract package information")]
     Package(#[from] PackageError),
-    #[serde(rename = "ltd.pog.ttr.build_info.extract.error.agent")]
+    #[serde(rename = "dev.thmsn.build_info.extract.error.agent")]
     #[error("Failed to extract agent information")]
     Agent(#[from] AgentError),
-    #[serde(rename = "ltd.pog.ttr.build_info.extract.error.git")]
+    #[serde(rename = "dev.thmsn.build_info.extract.error.git")]
     #[error("Failed to extract git information")]
     Git(#[from] GitError),
 }

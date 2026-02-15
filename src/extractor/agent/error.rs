@@ -9,7 +9,7 @@ use thiserror::Error;
     content = "context"
 )]
 pub enum AgentError {
-    #[serde(rename = "ltd.pog.ttr.build_info.extract.agent.unimplemented")]
+    #[serde(rename = "dev.thmsn.build_info.extract.agent.unimplemented")]
     #[error(
         "There currently arent any errors that the agent extractor can have, so this is here to make the derives happy :^)"
     )]
