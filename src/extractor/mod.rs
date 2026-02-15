@@ -1,5 +1,6 @@
 pub mod agent;
 mod error;
+pub mod git;
 pub mod package;
 
 pub use error::ExtractError;

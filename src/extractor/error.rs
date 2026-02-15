@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::extractor::{agent::AgentError, package::PackageError};
+use crate::extractor::{agent::AgentError, git::GitError, package::PackageError};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Error, valuable::Valuable)]
 #[serde(
@@ -17,4 +17,7 @@ pub enum ExtractError {
     #[serde(rename = "ltd.pog.ttr.build_info.extract.error.agent")]
     #[error("Failed to extract agent information")]
     Agent(#[from] AgentError),
+    #[serde(rename = "ltd.pog.ttr.build_info.extract.error.git")]
+    #[error("Failed to extract git information")]
+    Git(#[from] GitError),
 }
