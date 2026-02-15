@@ -36,6 +36,9 @@ pub fn emit() -> BuildInfoResult<()> {
         inner_error: e.into(),
     })?;
 
+    println!("cargo:rustc-check-cfg=cfg(emitted_buildinfo)");
+    println!("cargo:rustc-cfg=emitted_buildinfo");
+
     Ok(())
 }
 
@@ -48,4 +51,17 @@ pub fn __internal_load(s: &[u8]) -> BuildInfoResult<BuildInfo> {
 #[macro_export]
 macro_rules! load_build_info {
     () => {{ $crate::__internal_load(include_bytes!(concat!(env!("OUT_DIR"), "/buildinfo.bin"))) }};
+    (optional) => {{
+        #[allow(unexpected_cfgs)]
+        {
+            #[cfg(emitted_buildinfo)]
+            {
+                Some($crate::load_build_info!())
+            }
+            #[cfg(not(emitted_buildinfo))]
+            {
+                Option::<$crate::BuildInfoResult<$crate::BuildInfo>>::None
+            }
+        }
+    }};
 }

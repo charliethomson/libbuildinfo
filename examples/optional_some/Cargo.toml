@@ -1,0 +1,10 @@
+[package]
+name = "optional_some"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libbuildinfo = { path = "../.." }
+
+[build-dependencies]
+libbuildinfo = { path = "../.." }
