@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use serde::{Deserialize, Serialize};
 
 use crate::extractor::{Extractor, git::error::GitError};
@@ -19,105 +21,106 @@ pub struct GitInfo {
     pub commit_count: Option<u64>,
 }
 
+/// Run `git` with the given args in the current directory.
+fn git(args: &[&str]) -> std::io::Result<std::process::Output> {
+    Command::new("git").current_dir(".").args(args).output()
+}
+
+/// Run `git`, returning trimmed stdout on success, or `None` if the binary is
+/// missing, the command exits non-zero, or the output is empty. Used for the
+/// optional fields where absence is a valid, expected result.
+fn git_opt(args: &[&str]) -> Option<String> {
+    let out = git(args).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+/// Resolve the push URL of the default remote, preferring `origin`, otherwise
+/// the first configured remote.
+fn default_remote_url() -> Option<String> {
+    let remotes = git_opt(&["remote"])?;
+    let names: Vec<&str> = remotes.lines().collect();
+    let name = if names.contains(&"origin") {
+        "origin"
+    } else {
+        *names.first()?
+    };
+    git_opt(&["remote", "get-url", "--push", name])
+}
+
 impl Extractor for GitInfo {
     type Error = GitError;
 
     fn extract() -> Result<Self, Self::Error> {
-        let repo = gix::discover(".").map_err(|e| GitError::Discover {
+        // Confirm we are inside a working tree before doing anything else.
+        let inside = git(&["rev-parse", "--is-inside-work-tree"]).map_err(|e| {
+            GitError::Discover {
+                inner_error: e.into(),
+            }
+        })?;
+        if !inside.status.success() {
+            let msg = String::from_utf8_lossy(&inside.stderr).trim().to_string();
+            return Err(GitError::Discover {
+                inner_error: std::io::Error::other(msg).into(),
+            });
+        }
+
+        // Pull the core commit fields in a single call.
+        // Format: hash / unix timestamp / author name / author email / subject.
+        let head = git(&["log", "-1", "--format=%H%n%ct%n%an%n%ae%n%s"]).map_err(|e| {
+            GitError::Head {
+                inner_error: e.into(),
+            }
+        })?;
+        if !head.status.success() {
+            let msg = String::from_utf8_lossy(&head.stderr).trim().to_string();
+            return Err(GitError::Head {
+                inner_error: std::io::Error::other(msg).into(),
+            });
+        }
+
+        let stdout = String::from_utf8_lossy(&head.stdout);
+        let mut lines = stdout.lines();
+        let commit_hash = lines.next().unwrap_or_default().to_string();
+        let commit_timestamp = lines
+            .next()
+            .and_then(|s| s.parse::<i64>().ok())
+            .ok_or_else(|| GitError::Decode {
+                inner_error: std::io::Error::other("failed to parse commit timestamp").into(),
+            })?;
+        let author_name = lines.next().map(str::to_string);
+        let author_email = lines.next().map(str::to_string);
+        let commit_message = lines.next().map(str::to_string);
+
+        let commit_short_hash = commit_hash.chars().take(7).collect::<String>();
+
+        // Detached HEAD has no symbolic branch name.
+        let branch = git_opt(&["symbolic-ref", "--quiet", "--short", "HEAD"]);
+
+        let status = git(&["status", "--porcelain"]).map_err(|e| GitError::Status {
             inner_error: e.into(),
         })?;
+        if !status.status.success() {
+            let msg = String::from_utf8_lossy(&status.stderr).trim().to_string();
+            return Err(GitError::Status {
+                inner_error: std::io::Error::other(msg).into(),
+            });
+        }
+        let dirty = !String::from_utf8_lossy(&status.stdout).trim().is_empty();
 
-        let head = repo.head_ref().map_err(|e| GitError::Head {
-            inner_error: e.into(),
-        })?;
-
-        let branch = head.as_ref().map(|r| r.name().shorten().to_string());
-
-        let head_commit = repo.head_commit().map_err(|e| GitError::Head {
-            inner_error: e.into(),
-        })?;
-
-        let commit_hash = head_commit.id().to_string();
-        let commit_short_hash = commit_hash[..7.min(commit_hash.len())].to_string();
-
-        let commit_obj = head_commit.decode().map_err(|e| GitError::Decode {
-            inner_error: e.into(),
-        })?;
-
-        let committer = commit_obj.committer().map_err(|e| GitError::Decode {
-            inner_error: e.into(),
-        })?;
-        let author = commit_obj.author().map_err(|e| GitError::Decode {
-            inner_error: e.into(),
-        })?;
-        let message = commit_obj.message();
-
-        let commit_timestamp = committer.seconds();
-        let commit_message = Some(message.title.to_string());
-        let author_name = Some(author.name.to_string());
-        let author_email = Some(author.email.to_string());
-
-        let dirty = repo.is_dirty().map_err(|e| GitError::Status {
-            inner_error: e.into(),
-        })?;
-
-        let tags = repo
-            .references()
-            .ok()
-            .and_then(|refs| {
-                refs.tags().ok().map(|tags| {
-                    tags.filter_map(Result::ok)
-                        .filter_map(|mut r| {
-                            let target = r.peel_to_id().ok()?;
-                            if target == head_commit.id() {
-                                Some(r.name().shorten().to_string())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
+        let tags = git_opt(&["tag", "--points-at", "HEAD"])
+            .map(|s| s.lines().map(str::to_string).collect())
             .unwrap_or_default();
 
-        let remote_url = repo
-            .find_default_remote(gix::remote::Direction::Push)
-            .and_then(Result::ok)
-            .and_then(|remote| {
-                remote
-                    .url(gix::remote::Direction::Push)
-                    .map(|u| u.to_bstring().to_string())
-            });
+        let remote_url = default_remote_url();
 
-        let describe = repo
-            .head_commit()
-            .ok()
-            .and_then(|commit| {
-                commit
-                    .describe()
-                    .names(gix::commit::describe::SelectRef::AllTags)
-                    .try_resolve()
-                    .ok()
-                    .flatten()
-                    .map(|resolution| {
-                        resolution
-                            .format_with_dirty_suffix(None)
-                            .map(|f| f.to_string())
-                            .ok()
-                    })
-                    .flatten()
-            });
+        let describe = git_opt(&["describe", "--tags"]);
 
-        let commit_count = repo.head_commit().ok().and_then(|commit| {
-            commit
-                .ancestors()
-                .sorting(gix::revision::walk::Sorting::ByCommitTime(
-                    Default::default(),
-                ))
-                .all()
-                .ok()
-                .map(|iter| iter.filter_map(Result::ok).count() as u64)
-        });
+        let commit_count =
+            git_opt(&["rev-list", "--count", "HEAD"]).and_then(|s| s.parse::<u64>().ok());
 
         Ok(GitInfo {
             commit_hash,
